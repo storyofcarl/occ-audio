@@ -44,6 +44,15 @@ def cmd_cast(args: argparse.Namespace) -> int:
         print("No speaking characters found to cast.", file=sys.stderr)
         return 1
 
+    no_voice_note = [c for c in characters if not project.voice_note(c).strip()]
+    if no_voice_note:
+        print(f"Skipping (no voice_note in project.yaml): {', '.join(no_voice_note)}",
+              file=sys.stderr)
+    characters = [c for c in characters if c not in no_voice_note]
+    if not characters:
+        print("No castable characters (all missing a voice_note).", file=sys.stderr)
+        return 1
+
     to_cast = [c for c in characters if args.force or not project.is_locked(c)]
     clips, seconds, cost = estimate_audition_cost(len(to_cast), args.n)
     print(f"COST ESTIMATE: {len(to_cast)} character(s) x {args.n} take(s) = "

@@ -116,13 +116,27 @@ the assignment landed where intended before spending anything.
 
 Casting is a distinct, gated phase, analogous to occ's "preview before
 generate": for each character (all, or only "key" characters, per
-`cast_mode`), generate **4** short (~15s) audition takes — text-prompt-only
-(no reference), each varying one axis of the same voice brief (pace /
-energy / register / accent-strength) — and present them to the user. The
-user's choice is recorded by hand in `project.yaml` (`cast.<Name>.reference`).
-**No auto-selection.** Segment generation must not start until the cast the
-segment depends on has a recorded decision (a lock, or an explicit
-voice-only fallback).
+`cast_mode` — `key` casts exactly the characters declared in `cast:`, `all`
+casts every speaker the script parser finds), generate **4** short (~15s)
+audition takes — text-prompt-only (no reference) — and present them to the
+user. **Every take uses the identical prompt.** Seed Audio is stateless and
+non-deterministic per call, so the same prompt run 4 times already produces
+4 distinct voice realizations; manufacturing "faster pace"/"heightened
+emotion" variants only steered performance on that one line, not the
+underlying voice, so it added noise without adding real choice. The user's
+choice is recorded by hand in `project.yaml` (`cast.<Name>.reference`).
+**No auto-selection.**
+
+**A character must have a `voice_note` to be cast.** With nothing to
+describe the voice, Seed Audio picks an unconstrained voice and the "take"
+isn't an audition of anything — `generate_auditions` refuses to run without
+one. This is also why `cast_mode: key` must read the actual `cast:`
+declarations rather than guess by line-count: guessing surfaces characters
+with no configured `voice_note`, which either wastes the call (blank note)
+or silently casts characters nobody asked to cast and pays for it.
+
+Segment generation must not start until the cast the segment depends on has
+a recorded decision (a lock, or an explicit voice-only fallback).
 
 ## 4. From source to segments
 

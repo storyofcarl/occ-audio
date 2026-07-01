@@ -106,10 +106,35 @@ def test_generate_auditions_writes_takes_and_manifest() -> None:
         check("manifest has 4 take entries", len(manifest["takes"]) == 4)
         check("no reference auto-selected in project.yaml",
               project.voice_reference("Hero") is None)
+        check("every take used the identical prompt (no manufactured "
+              "pace/emotion variants) — stateless randomness alone gives "
+              "the variation",
+              len(set(fake.calls)) == 1)
+
+
+def test_generate_auditions_rejects_blank_voice_note() -> None:
+    print("generate_auditions: refuses to cast a character with no voice_note "
+          "(an unconstrained voice isn't a real audition)")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "script.txt").write_text("Extra said, \"Hi.\"\n", encoding="utf-8")
+        (root / "project.yaml").write_text(
+            "\n".join(["name: t", "source: script.txt", "cast:", "  Extra:", "    voice_note: \"\""]) + "\n",
+            encoding="utf-8")
+        project = load_project(str(root / "project.yaml"))
+        fake = FakeBackend()
+        casting.get_audio_backend = lambda name: (fake, "seed-audio-1.0")
+        try:
+            casting.generate_auditions(project, "Extra", n=4)
+            check("raises for a blank voice_note", False)
+        except casting.BackendError:
+            check("raises for a blank voice_note", True)
+        check("no backend calls made", len(fake.calls) == 0)
 
 
 if __name__ == "__main__":
     test_extract_characters_key_vs_all()
     test_generate_auditions_writes_takes_and_manifest()
+    test_generate_auditions_rejects_blank_voice_note()
     print(f"\n{_passed} passed, {_failed} failed")
     sys.exit(1 if _failed else 0)

@@ -119,10 +119,15 @@ casting/segmentation — a deliberate, human-declared fix, never guessed.
 ## Casting
 
 `occ_audio cast` generates 4 short (~15s) audition takes per character (per
-`cast_mode`), written to `<project>/casting/<Character>/take_{1..4}.wav`
-plus a `manifest.json` recording the prompt used for each take. Listen, then
-record your choice in `project.yaml` (`cast.<Name>.reference`). No
-auto-selection.
+`cast_mode` — `key` casts exactly what's declared in `cast:`, `all` casts
+every speaker found in the script), written to
+`<project>/casting/<Character>/take_{1..4}.wav` plus a `manifest.json`
+recording the prompt used. Every take is the identical prompt — Seed
+Audio's per-call randomness alone gives 4 distinct voices, no manufactured
+variants needed. A character needs a `voice_note` to be cast at all (with
+none, Seed Audio picks an unconstrained voice — not a real audition).
+Listen, then record your choice in `project.yaml` (`cast.<Name>.reference`).
+No auto-selection.
 
 Each run writes `<project>/outputs/runs/<run>/` with `segments/`,
 `prompts/`, `results/`, `manifest.json`, `final.<ext>`. It publishes the
