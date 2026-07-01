@@ -14,6 +14,7 @@ from pathlib import Path
 
 from .backends.base import AudioSpec, ProgressFn
 from .backends.registry import get_audio_backend
+from .backends.seed_audio import PRICE_PER_MINUTE_USD
 from .config import ProjectConfig
 from .script_source import SourceDocument, speaking_characters
 
@@ -21,6 +22,7 @@ AUDITION_LINE = (
     "Hello. It's good to finally meet you. "
     "I've been looking forward to this for a long time."
 )
+ESTIMATED_AUDITION_SECONDS = 15   # each take is a short T2A clip by design
 
 # (variant label, extra descriptor appended to the voice_note)
 AUDITION_VARIANTS: list[tuple[str, str]] = [
@@ -29,6 +31,16 @@ AUDITION_VARIANTS: list[tuple[str, str]] = [
     ("slower pace", "speaking slowly and deliberately"),
     ("heightened emotion", "with more emotional intensity and feeling"),
 ]
+
+
+def estimate_audition_cost(n_characters: int, n_takes: int) -> tuple[int, float, float]:
+    """(clips, estimated seconds, estimated USD) for casting ``n_characters``
+    with ``n_takes`` audition takes each. Estimate only — actual billing is
+    per-clip real duration."""
+    clips = n_characters * n_takes
+    seconds = clips * ESTIMATED_AUDITION_SECONDS
+    cost = (seconds / 60.0) * PRICE_PER_MINUTE_USD
+    return clips, seconds, cost
 
 MIN_LINES_FOR_KEY_CAST = 2
 

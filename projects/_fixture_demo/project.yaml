@@ -11,3 +11,4 @@ cast:
     voice_note: "middle-aged male, gravelly, calm under pressure"
 defaults:
   target_segment_seconds: 60
+  continuation_seconds: 20

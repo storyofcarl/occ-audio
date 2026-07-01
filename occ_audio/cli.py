@@ -17,10 +17,13 @@ from pathlib import Path
 from . import __version__
 from .backends.base import BackendError
 from .backends.registry import list_models
-from .casting import extract_characters, generate_auditions
+from .casting import estimate_audition_cost, extract_characters, generate_auditions
 from .config import load_project
 from .manifest import latest_run_dir, log
-from .pipeline import PROMPT_CHAR_LIMIT, RunOptions, preview, restitch, run
+from .pipeline import (
+    PROMPT_CHAR_LIMIT, RunOptions, estimate_cost, format_cost_line, preview,
+    restitch, run,
+)
 from .script_source import load_source
 
 
@@ -40,6 +43,12 @@ def cmd_cast(args: argparse.Namespace) -> int:
     if not characters:
         print("No speaking characters found to cast.", file=sys.stderr)
         return 1
+
+    to_cast = [c for c in characters if args.force or not project.is_locked(c)]
+    clips, seconds, cost = estimate_audition_cost(len(to_cast), args.n)
+    print(f"COST ESTIMATE: {len(to_cast)} character(s) x {args.n} take(s) = "
+          f"{clips} clip(s), ~{seconds:.0f}s (~{seconds / 60.0:.1f} min) -> "
+          f"~${cost:.2f} at $0.15/min (estimate only)\n")
 
     for name in characters:
         if project.is_locked(name) and not args.force:
@@ -63,6 +72,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
     print()
     for line in result.plan_lines:
         print("  " + line)
+    print(f"\n{format_cost_line(result.estimated_new_clips, result.estimated_new_seconds, result.estimated_cost_usd)}")
     return 0
 
 
@@ -112,6 +122,8 @@ def cmd_preview(args: argparse.Namespace) -> int:
         flag = "  <-- OVER LIMIT" if n > PROMPT_CHAR_LIMIT else ""
         print(f"  {job.draft.seg_id:<10} {n:>5} chars  "
               f"{len(job.references)} ref(s){flag}")
+    clips, seconds, cost = estimate_cost(jobs)
+    print(f"\n{format_cost_line(clips, seconds, cost)}")
     if over:
         print(f"\nWARNING: over the {PROMPT_CHAR_LIMIT}-char limit: {', '.join(over)}")
         return 1

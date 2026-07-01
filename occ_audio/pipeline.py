@@ -28,7 +28,7 @@ from pathlib import Path
 from . import __version__
 from .backends.base import AudioReference, AudioSpec, BackendError
 from .backends.registry import get_audio_backend
-from .backends.seed_audio import MAX_TEXT_PROMPT_CHARS
+from .backends.seed_audio import MAX_TEXT_PROMPT_CHARS, PRICE_PER_MINUTE_USD
 from .config import ProjectConfig
 from .manifest import RunManifest, log, new_run_dir, write_json
 from .prompts import build_prompt
@@ -63,6 +63,9 @@ class RunResult:
     generated: int = 0
     failed: list[str] = field(default_factory=list)
     segment_hashes: dict[str, str] = field(default_factory=dict)
+    estimated_new_clips: int = 0        # clips NOT covered by reuse (will cost)
+    estimated_new_seconds: float = 0.0  # rough duration estimate, not billed fact
+    estimated_cost_usd: float = 0.0
 
 
 @dataclass
@@ -125,6 +128,24 @@ def _regen_set(regen: str | None, all_ids: list[str]) -> set[str]:
     if regen.strip().lower() == "all":
         return set(all_ids)
     return {s.strip() for s in regen.split(",") if s.strip()}
+
+
+def estimate_cost(jobs: list[SegmentJob]) -> tuple[int, float, float]:
+    """(clips to actually generate, estimated total seconds, estimated USD)
+    for the jobs that are NOT reuse hits. This is a rough estimate off the
+    segmenter's words-per-minute duration guess, not a billing fact — actual
+    cost is based on the real ``original_duration`` Seed Audio returns."""
+    to_generate = [j for j in jobs if not j.reuse_hit]
+    seconds = sum(j.draft.estimated_seconds for j in to_generate)
+    cost = (seconds / 60.0) * PRICE_PER_MINUTE_USD
+    return len(to_generate), seconds, cost
+
+
+def format_cost_line(clips: int, seconds: float, cost: float) -> str:
+    return (f"COST ESTIMATE: {clips} clip(s) to generate, ~{seconds:.0f}s "
+            f"(~{seconds / 60.0:.1f} min) -> ~${cost:.2f} at "
+            f"${PRICE_PER_MINUTE_USD:.2f}/min (estimate only, actual "
+            f"billing is per-clip real duration)")
 
 
 def _plan_line(job: SegmentJob, total: int) -> str:
@@ -367,13 +388,19 @@ def run(project: ProjectConfig, options: RunOptions) -> RunResult:
     for line in plan_lines:
         log("  " + line)
 
+    clips, seconds, cost = estimate_cost(jobs)
+    cost_line = format_cost_line(clips, seconds, cost)
+    log(cost_line)
+
     if options.dry_run:
         log("DRY RUN - no API calls, no files written.")
         return RunResult(
             run_dir=Path(project.output_dir) / "runs" / "(dry-run)",
             final_path=None, dry_run=True,
             plan_lines=[header] + plan_lines,
-            segment_hashes={j.draft.seg_id: j.cumulative for j in jobs})
+            segment_hashes={j.draft.seg_id: j.cumulative for j in jobs},
+            estimated_new_clips=clips, estimated_new_seconds=seconds,
+            estimated_cost_usd=cost)
 
     run_dir = new_run_dir(project.output_dir, options.run_name)
     meta = {
@@ -437,7 +464,9 @@ def run(project: ProjectConfig, options: RunOptions) -> RunResult:
         run_dir=run_dir, final_path=final_path, latest_path=latest_path,
         segments=[r["path"] for r in ok], dry_run=False, plan_lines=plan_lines,
         reused=reused, generated=generated, failed=[r["seg_id"] for r in failed],
-        segment_hashes={j.draft.seg_id: j.cumulative for j in jobs})
+        segment_hashes={j.draft.seg_id: j.cumulative for j in jobs},
+        estimated_new_clips=clips, estimated_new_seconds=seconds,
+        estimated_cost_usd=cost)
 
 
 def preview(project: ProjectConfig) -> list[SegmentJob]:

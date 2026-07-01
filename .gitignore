@@ -3,6 +3,13 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-projects/*/outputs/
-projects/*/casting/*/take_*.wav
 _prompts_preview.md
+
+# Real production projects are not pushed to GitHub — only pipeline code
+# and test/fixture projects. Allow-list test projects explicitly below;
+# their generated outputs/casting artifacts still stay out (regeneratable
+# binary run output, not source material worth tracking).
+projects/*
+!projects/_fixture_demo
+projects/_fixture_demo/outputs/
+projects/_fixture_demo/casting/

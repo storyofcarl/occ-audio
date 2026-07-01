@@ -19,6 +19,7 @@ MAX_AUDIO_REFERENCES = 3
 MAX_IMAGE_REFERENCES = 1
 MAX_TEXT_PROMPT_CHARS = 2048
 MAX_OUTPUT_SECONDS = 120
+PRICE_PER_MINUTE_USD = 0.15   # billed on original_duration, per docs/seed-audio-1.0-http-api.md
 
 
 def _base_url() -> str:

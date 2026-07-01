@@ -48,7 +48,7 @@ A project is a folder with a `project.yaml`:
 ```yaml
 name: my_audiobook
 mode: audiobook                     # audiobook | radioplay
-source: script.txt                  # novel / screenplay / script text
+source: script.fdx                  # .fdx (Final Draft), .docx, .pdf, .md, or .txt
 cast_mode: key                      # key | all
 cast:
   Narrator:
@@ -70,6 +70,22 @@ gets a hard-locked `reference` — **at most 3 characters can be hard-locked
 per segment** (a Seed Audio API limit), so characters without room in a
 given segment's 3 slots fall back to their `voice_note` description. See
 `METHODOLOGY.md` §2.
+
+### Source formats
+
+`source:` accepts `.fdx` (Final Draft — parsed from its own structured
+Scene Heading/Character/Dialogue/Action types, the most reliable input),
+`.docx` (Word, via `python-docx`), `.pdf` (via `pypdf`), `.md`, or plain
+`.txt`. Non-FDX formats fall back to the same screenplay/prose heuristics
+plain text uses. `.docx`/`.pdf` support needs their packages installed
+(`pip install -r requirements.txt`).
+
+### Cost estimate
+
+Every `scan`, `preview`, and `cast` prints a cost estimate — clip count,
+estimated total seconds, and estimated USD at $0.15/min — before any paid
+call. It's an estimate off the segmenter's rough duration guess, not a
+billing fact; actual cost is based on each clip's real generated duration.
 
 ### Continuation reference (optional)
 
