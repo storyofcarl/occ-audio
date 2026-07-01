@@ -1,0 +1,13 @@
+name: fixture_demo
+mode: audiobook
+source: script.txt
+cast_mode: all
+cast:
+  Narrator:
+    voice_note: "warm female, 40s, measured pace"
+  Alice:
+    voice_note: "young female, anxious, clear voice"
+  Bob:
+    voice_note: "middle-aged male, gravelly, calm under pressure"
+defaults:
+  target_segment_seconds: 60
