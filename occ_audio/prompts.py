@@ -7,11 +7,19 @@ this is the one binding contract with the API (METHODOLOGY.md §6). In
 entry, configured like any character); in **radioplay** mode narration
 becomes ambience/SFX/music direction and only cast dialogue is performed.
 
-The exact inline tagging style below (``Name (@Audio1) says: "..."``) follows
-the technical API doc's own examples (``docs/seed-audio-1.0-http-api.md``,
-"Use @Audio1 as the narrator voice and read the following line naturally").
-Treat it as a look-dev-validated-on-first-segment point, not gospel — confirm
-on one cheap real call before wide spend, same as any new prompt convention.
+**A character's full voice description appears only on their first mention
+in a segment; every later line is just their bare name (or name + @AudioN
+tag).** This matches BytePlus's own demonstrated convention in both example
+styles (``docs/seed-audio-1.0-overview.md``): the "Great War" T2A example
+fully describes each character once ("Aric (young prince, breathless but
+brave...)") and then just names them on every later line ("Mara, gripping
+her sword,"); the League of Legends TA2A example does the same with a
+reference tag, dropping the voice note but keeping "( voiced by <<TGT_SPK2>>
+)" on repeats. Repeating the full description every line was measured to
+blow well past the 2048-char limit on multi-character dialogue-heavy
+segments for no benefit — the model already carries the established voice
+forward within one continuous prompt, so re-describing it is redundant
+exactly the way re-describing a reference image is in occ's video pipeline.
 
 **Continuation reference** (METHODOLOGY.md §2a): when the caller passes
 ``continuation_characters`` (the character(s) the *previous* segment's tail
@@ -62,7 +70,7 @@ def build_prompt(segment: DraftSegment, project: ProjectConfig, *,
             continue  # cast declared a lock slot but recorded no reference yet
         audio_tag[name] = f"@Audio{len(references)}"
 
-    def voice_for(name: str) -> str:
+    def first_mention(name: str) -> str:
         tag = audio_tag.get(name)
         note = project.voice_note(name)
         if tag and name in covered:
@@ -73,15 +81,35 @@ def build_prompt(segment: DraftSegment, project: ProjectConfig, *,
             return tag
         return note or "a neutral voice"
 
+    def repeat_mention(name: str) -> str | None:
+        """None means no parenthetical at all — a bare name, as BytePlus's
+        own un-referenced repeat mentions do (e.g. "Mara, gripping her
+        sword,")."""
+        return audio_tag.get(name)
+
+    mentioned: set[str] = set()
     lines: list[str] = []
     for beat in segment.beats:
         if beat.kind == "narration":
             if project.mode == "radioplay":
                 lines.append(f"[Ambience/SFX: {beat.text}]")
+                continue
+            name = "Narrator"
+            if name not in mentioned:
+                lines.append(f'Narrator ({first_mention(name)}) reads: "{beat.text}"')
+                mentioned.add(name)
             else:
-                lines.append(f'Narrator ({voice_for("Narrator")}) reads: "{beat.text}"')
+                desc = repeat_mention(name)
+                lines.append(f'Narrator ({desc}) reads: "{beat.text}"' if desc
+                            else f'Narrator reads: "{beat.text}"')
         elif beat.kind == "dialogue":
             name = beat.speaker or "Unknown"
-            lines.append(f'{name} ({voice_for(name)}) says: "{beat.text}"')
+            if name not in mentioned:
+                lines.append(f'{name} ({first_mention(name)}) says: "{beat.text}"')
+                mentioned.add(name)
+            else:
+                desc = repeat_mention(name)
+                lines.append(f'{name} ({desc}) says: "{beat.text}"' if desc
+                            else f'{name} says: "{beat.text}"')
 
     return "\n".join(lines), references, audio_tag, continuation_index

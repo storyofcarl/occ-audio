@@ -110,9 +110,48 @@ def test_continuation_slot_frees_room_for_a_third_character() -> None:
               audio_tag == {"A": "@Audio1", "B": "@Audio2", "C": "@Audio3"})
 
 
+def test_full_descriptor_only_on_first_mention() -> None:
+    print("build_prompt: a character's full voice description appears only "
+          "on their first line in the segment; later lines are bare (or "
+          "tag-only for a locked character) — repeating it every line blew "
+          "past the 2048-char limit for no benefit")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "hero.wav").write_bytes(b"\x00\x01")
+        project = _project(root, [
+            "  Hero:", "    voice_note: a booming heroic voice", "    reference: hero.wav",
+            "  Villain:", "    voice_note: a cold sneering voice",
+        ])
+        segment = DraftSegment(
+            seg_id="S001",
+            beats=[
+                Beat(kind="dialogue", text="First line.", speaker="Hero"),
+                Beat(kind="dialogue", text="Reply.", speaker="Villain"),
+                Beat(kind="dialogue", text="Second line.", speaker="Hero"),
+                Beat(kind="dialogue", text="Second reply.", speaker="Villain"),
+            ],
+            locked_characters=["Hero", "Villain"],
+        )
+        prompt, references, audio_tag, _ = build_prompt(segment, project)
+        lines = prompt.splitlines()
+
+        check("Hero's first line carries the full tag+voice_note",
+              lines[0] == 'Hero (@Audio1, a booming heroic voice) says: "First line."')
+        check("Villain's first line carries the full voice_note (unlocked)",
+              lines[1] == 'Villain (a cold sneering voice) says: "Reply."')
+        check("Hero's second line is tag-only, no repeated voice_note",
+              lines[2] == 'Hero (@Audio1) says: "Second line."')
+        check("Villain's second line is bare (no reference, no repeated note)",
+              lines[3] == 'Villain says: "Second reply."')
+        check("voice_note text appears exactly once per character in the prompt",
+              prompt.count("a booming heroic voice") == 1
+              and prompt.count("a cold sneering voice") == 1)
+
+
 if __name__ == "__main__":
     test_continuation_takes_first_slot_and_covers_only_named_characters()
     test_no_continuation_uses_normal_locked_slots()
     test_continuation_slot_frees_room_for_a_third_character()
+    test_full_descriptor_only_on_first_mention()
     print(f"\n{_passed} passed, {_failed} failed")
     sys.exit(1 if _failed else 0)
