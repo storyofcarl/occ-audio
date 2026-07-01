@@ -36,7 +36,7 @@ def _split_csv(value: str | None) -> list[str] | None:
 def cmd_cast(args: argparse.Namespace) -> int:
     project = load_project(args.project)
     doc = normalize_speakers(load_source(project.source), project.name_aliases)
-    characters = extract_characters(doc, project.cast_mode)
+    characters = extract_characters(doc, project)
     wanted = _split_csv(args.characters)
     if wanted:
         characters = [c for c in characters if c in wanted]

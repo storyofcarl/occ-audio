@@ -42,9 +42,6 @@ def estimate_audition_cost(n_characters: int, n_takes: int) -> tuple[int, float,
     cost = (seconds / 60.0) * PRICE_PER_MINUTE_USD
     return clips, seconds, cost
 
-MIN_LINES_FOR_KEY_CAST = 2
-
-
 @dataclass
 class AuditionTake:
     variant: str
@@ -52,22 +49,25 @@ class AuditionTake:
     path: Path
 
 
-def extract_characters(doc: SourceDocument, cast_mode: str,
-                       min_lines: int = MIN_LINES_FOR_KEY_CAST) -> list[str]:
-    """Speaking character names, ranked by line count.
+def extract_characters(doc: SourceDocument, project: ProjectConfig) -> list[str]:
+    """Speaking character names to cast, per ``project.cast_mode``.
 
-    ``all`` mode returns every named speaker. ``key`` mode returns speakers
-    at/above ``min_lines``, falling back to the single most-frequent speaker
-    if none clear the threshold (so a short/sparse script still gets a cast).
+    ``all`` returns every named speaker found in the script, ranked by line
+    count — can be a large (expensive) list for a script with many minor
+    one-scene characters.
+
+    ``key`` returns ONLY the characters explicitly declared in
+    ``project.yaml``'s ``cast:`` block that actually speak in the script. It
+    does NOT auto-discover minor characters by a line-count threshold —
+    that auto-discovery previously cast every 2+-line character in the
+    script regardless of what was declared, which silently balloons cost
+    on an ensemble script. Declare a character in ``cast:`` to cast them.
     """
     counts = speaking_characters(doc)
-    ranked = sorted(counts.items(), key=lambda kv: -kv[1])
-    if cast_mode == "all":
-        return [name for name, _ in ranked]
-    keyed = [name for name, n in ranked if n >= min_lines]
-    if keyed:
-        return keyed
-    return [ranked[0][0]] if ranked else []
+    if project.cast_mode == "all":
+        return [name for name, _ in sorted(counts.items(), key=lambda kv: -kv[1])]
+    speaking_lower = {name.strip().lower() for name in counts}
+    return [name for name in project.cast if name.strip().lower() in speaking_lower]
 
 
 def audition_prompt(voice_note: str, variant_desc: str, line: str = AUDITION_LINE) -> str:

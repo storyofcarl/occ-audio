@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -12,6 +13,12 @@ import occ_audio.casting as casting               # noqa: E402
 from occ_audio.backends.base import AudioResult    # noqa: E402
 from occ_audio.config import load_project          # noqa: E402
 from occ_audio.script_source import Beat, SourceDocument  # noqa: E402
+
+
+@dataclass
+class _FakeProject:
+    cast_mode: str = "key"
+    cast: dict = field(default_factory=dict)
 
 _passed = 0
 _failed = 0
@@ -41,17 +48,32 @@ class FakeBackend:
 
 
 def test_extract_characters_key_vs_all() -> None:
-    print("extract_characters: 'key' keeps frequent speakers; 'all' keeps everyone")
+    print("extract_characters: 'key' casts ONLY characters declared in "
+          "project.cast (never auto-discovers minor characters by line "
+          "count); 'all' casts every speaker found in the script")
     beats = []
-    for name, n in (("Alice", 5), ("Bob", 4), ("Eve", 1)):
+    # Alice/Bob/Eve all speak plenty of lines (Eve included), but only
+    # Alice and Bob are declared in the project's cast: block.
+    for name, n in (("Alice", 5), ("Bob", 4), ("Eve", 10)):
         for _ in range(n):
             beats.append(Beat(kind="dialogue", text="line", speaker=name))
     doc = SourceDocument(path=Path("x"), format="screenplay", beats=beats)
-    key_cast = casting.extract_characters(doc, "key", min_lines=2)
-    check("key mode drops the one-line character", "Eve" not in key_cast)
-    check("key mode keeps the frequent speakers", set(key_cast) == {"Alice", "Bob"})
-    all_cast = casting.extract_characters(doc, "all")
-    check("all mode keeps everyone", set(all_cast) == {"Alice", "Bob", "Eve"})
+
+    key_project = _FakeProject(cast_mode="key", cast={"Alice": None, "Bob": None})
+    key_cast = casting.extract_characters(doc, key_project)
+    check("key mode drops Eve even though she has the most lines",
+          "Eve" not in key_cast)
+    check("key mode keeps exactly the declared characters",
+          set(key_cast) == {"Alice", "Bob"})
+
+    all_project = _FakeProject(cast_mode="all", cast={"Alice": None, "Bob": None})
+    all_cast = casting.extract_characters(doc, all_project)
+    check("all mode keeps everyone regardless of what's declared",
+          set(all_cast) == {"Alice", "Bob", "Eve"})
+
+    key_project_undeclared = _FakeProject(cast_mode="key", cast={"Someone Not In Script": None})
+    check("key mode drops a declared name that never actually speaks",
+          casting.extract_characters(doc, key_project_undeclared) == [])
 
 
 def test_generate_auditions_writes_takes_and_manifest() -> None:
