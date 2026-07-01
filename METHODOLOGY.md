@@ -86,6 +86,32 @@ than a dedicated API field.
   pattern across a whole project), the same as any other "confirm before
   wide spend" point in this doc.
 
+## 2b. Chain per sequence, not per script (parallelism)
+
+Left unbounded, continuation chaining (§2a) turns a whole script into one
+long serial chain — every segment waits for its predecessor, so a 90-minute
+film generates one clip at a time. `project.yaml`'s `sequence_starts` fixes
+this: a list of 1-based **heading occurrence numbers** marking where each
+new narrative sequence begins (e.g. the classic 8-sequence structure —
+Status Quo/Inciting Incident, Predicament/Plot Point 1, Rising Action,
+Midpoint, Subplot/Escalation, Low Point/Plot Point 2, New Plan, Climax/
+Resolution). The chain only links segments that share a `sequence_id`, so:
+
+- Segments **within** one sequence still chain for voice continuity across
+  a scene that spans multiple segments.
+- Different **sequences** become independent chains and generate **in
+  parallel** — an 8-sequence film runs as 8 concurrent chains instead of
+  one, up to `defaults.concurrency`.
+- With `sequence_starts` left empty (the default), the whole script is one
+  sequence — today's behavior, unchanged.
+
+Getting the boundaries right requires actually reading the script and
+identifying where each structural beat genuinely lands (inciting incident,
+midpoint reveal, low point, climax) — do not guess by page-count proportion.
+Boundaries must fall on real scene-heading breaks (a sequence can't split
+mid-scene); `occ_audio scan`'s `seqN` tag on every segment is how you verify
+the assignment landed where intended before spending anything.
+
 ## 3. Cast before you spend
 
 Casting is a distinct, gated phase, analogous to occ's "preview before

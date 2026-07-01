@@ -98,6 +98,24 @@ character(s) actually spoke in that trailing window (`occ_audio scan`/
 continuation-linked segments run in order, like occ's video chain mode.
 See `METHODOLOGY.md` §2a before enabling this on a real project.
 
+### Sequences (parallel chains)
+
+`sequence_starts: [9, 15, 20, ...]` — a list of 1-based scene-heading
+occurrence numbers — splits a continuation-enabled project into independent
+chains (e.g. one per act/sequence of an 8-sequence structure), so different
+sequences generate **in parallel** instead of one long serial chain across
+the whole script. Segments within a sequence still chain for continuity.
+Every segment's `occ_audio scan` line shows its `seqN` tag — verify the
+assignment lands on the intended story beats before spending. See
+`METHODOLOGY.md` §2b.
+
+### Character aliases
+
+Real scripts sometimes spell one character's name multiple ways (a dropped
+apostrophe, a curly vs. straight quote, a typo). `character_aliases:` in
+`project.yaml` maps each variant string to one canonical name, merged before
+casting/segmentation — a deliberate, human-declared fix, never guessed.
+
 ## Casting
 
 `occ_audio cast` generates 4 short (~15s) audition takes per character (per

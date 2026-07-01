@@ -33,7 +33,7 @@ from .config import ProjectConfig
 from .manifest import RunManifest, log, new_run_dir, write_json
 from .prompts import build_prompt
 from .reuse import ReuseIndex, cumulative_hash, references_hash, segment_input_hash
-from .script_source import load_source
+from .script_source import load_source, normalize_speakers
 from .segmenter import DraftSegment, segment_source
 from .stitch import concat_audios, extract_tail_audio
 
@@ -151,7 +151,7 @@ def format_cost_line(clips: int, seconds: float, cost: float) -> str:
 def _plan_line(job: SegmentJob, total: int) -> str:
     d = job.draft
     bits = [
-        f"{job.index + 1}/{total} {d.seg_id} ~{d.estimated_seconds:.0f}s "
+        f"{job.index + 1}/{total} {d.seg_id} seq{d.sequence_id} ~{d.estimated_seconds:.0f}s "
         f"{len(job.prompt)}chars",
         f"locked={','.join(d.locked_characters) or '(none)'}",
     ]
@@ -181,8 +181,9 @@ def _plan_jobs(drafts: list[DraftSegment], project: ProjectConfig,
     for i, draft in enumerate(drafts):
         prev_draft = drafts[i - 1] if i > 0 else None
         prospective_len = chain_len + 1
+        same_sequence = prev_draft is not None and prev_draft.sequence_id == draft.sequence_id
         use_continuation = bool(
-            continuation_seconds > 0 and prev_draft is not None
+            continuation_seconds > 0 and prev_draft is not None and same_sequence
             and prev_draft.tail_characters
             and (max_chain <= 0 or prospective_len <= max_chain)
         )
@@ -361,7 +362,7 @@ def _execute_chain(chain: list[SegmentJob], project: ProjectConfig, run_dir: Pat
 
 
 def _select(project: ProjectConfig, options: RunOptions) -> list[DraftSegment]:
-    doc = load_source(project.source)
+    doc = normalize_speakers(load_source(project.source), project.name_aliases)
     drafts = segment_source(doc, project)
     if options.segments_filter:
         wanted = set(options.segments_filter)

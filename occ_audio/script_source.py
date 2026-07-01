@@ -265,3 +265,24 @@ def speaking_characters(doc: SourceDocument) -> dict[str, int]:
         if beat.kind == "dialogue" and beat.speaker:
             counts[beat.speaker] = counts.get(beat.speaker, 0) + 1
     return counts
+
+
+def normalize_speakers(doc: SourceDocument, aliases: dict[str, str]) -> SourceDocument:
+    """Rewrite dialogue beats' speakers through ``aliases`` (project.yaml's
+    ``character_aliases:``), case-insensitive on the alias key.
+
+    Real screenplays sometimes spell the same character's name multiple
+    ways across the document (a dropped apostrophe, a curly vs. straight
+    quote, a nickname) — the parser has no way to know these are one
+    character, so this is a deliberate, human-declared merge, not a guess.
+    Mutates ``doc.beats`` in place and returns ``doc`` for chaining.
+    """
+    if not aliases:
+        return doc
+    lookup = {k.strip().lower(): v for k, v in aliases.items()}
+    for beat in doc.beats:
+        if beat.kind == "dialogue" and beat.speaker:
+            canonical = lookup.get(beat.speaker.strip().lower())
+            if canonical:
+                beat.speaker = canonical
+    return doc

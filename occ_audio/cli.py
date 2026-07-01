@@ -24,7 +24,7 @@ from .pipeline import (
     PROMPT_CHAR_LIMIT, RunOptions, estimate_cost, format_cost_line, preview,
     restitch, run,
 )
-from .script_source import load_source
+from .script_source import load_source, normalize_speakers
 
 
 def _split_csv(value: str | None) -> list[str] | None:
@@ -35,7 +35,7 @@ def _split_csv(value: str | None) -> list[str] | None:
 
 def cmd_cast(args: argparse.Namespace) -> int:
     project = load_project(args.project)
-    doc = load_source(project.source)
+    doc = normalize_speakers(load_source(project.source), project.name_aliases)
     characters = extract_characters(doc, project.cast_mode)
     wanted = _split_csv(args.characters)
     if wanted:

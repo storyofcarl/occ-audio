@@ -8,7 +8,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from occ_audio.script_source import load_source, speaking_characters  # noqa: E402
+from occ_audio.script_source import (  # noqa: E402
+    Beat, SourceDocument, load_source, normalize_speakers, speaking_characters,
+)
 
 _passed = 0
 _failed = 0
@@ -118,10 +120,43 @@ def test_markdown_heading_detected() -> None:
               headings == ["Scene One", "Scene Two"])
 
 
+def test_normalize_speakers_merges_spelling_variants() -> None:
+    print("normalize_speakers: merges declared name-spelling variants onto "
+          "one canonical character, case-insensitive on the alias key")
+    doc = SourceDocument(path=Path("x"), format="screenplay", beats=[
+        Beat(kind="dialogue", text="a", speaker="Tracee’s Daughter"),  # curly quote
+        Beat(kind="dialogue", text="b", speaker="Tracee Daughter"),         # dropped apostrophe
+        Beat(kind="dialogue", text="c", speaker="TRACEE'S DAUGHTER"),      # straight quote, caps
+        Beat(kind="dialogue", text="d", speaker="Mabel"),                  # untouched
+    ])
+    aliases = {
+        "Tracee’s Daughter": "Tracee's Daughter",
+        "Tracee Daughter": "Tracee's Daughter",
+        "tracee's daughter": "Tracee's Daughter",   # covers the caps variant (lowercased key)
+    }
+    normalize_speakers(doc, aliases)
+    counts = speaking_characters(doc)
+    check("all three variants merged into one canonical speaker",
+          counts.get("Tracee's Daughter") == 3)
+    check("Mabel is untouched", counts.get("Mabel") == 1)
+    check("no leftover variant keys remain", len(counts) == 2)
+
+
+def test_normalize_speakers_noop_when_no_aliases() -> None:
+    print("normalize_speakers: a no-op when aliases is empty")
+    doc = SourceDocument(path=Path("x"), format="screenplay", beats=[
+        Beat(kind="dialogue", text="a", speaker="Mabel"),
+    ])
+    result = normalize_speakers(doc, {})
+    check("speaker unchanged", result.beats[0].speaker == "Mabel")
+
+
 if __name__ == "__main__":
     test_fdx_parses_structured_types()
     test_docx_extracts_paragraphs()
     test_pdf_extracts_text()
     test_markdown_heading_detected()
+    test_normalize_speakers_merges_spelling_variants()
+    test_normalize_speakers_noop_when_no_aliases()
     print(f"\n{_passed} passed, {_failed} failed")
     sys.exit(1 if _failed else 0)

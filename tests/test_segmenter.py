@@ -37,10 +37,13 @@ class _FakeDefaults:
 class _FakeProject:
     mode: str = "audiobook"
     defaults: _FakeDefaults = None
+    sequence_starts: list = None
 
     def __post_init__(self):
         if self.defaults is None:
             self.defaults = _FakeDefaults()
+        if self.sequence_starts is None:
+            self.sequence_starts = []
 
 
 def test_respects_char_budget() -> None:
@@ -141,6 +144,42 @@ def test_tail_characters_only_covers_the_trailing_window() -> None:
           segments_wide[0].tail_characters == ["Bob", "Alice"])
 
 
+def test_sequence_id_defaults_to_one() -> None:
+    print("segment_source: sequence_id is 1 for every segment when "
+          "sequence_starts is empty (today's default behavior)")
+    doc = SourceDocument(path=Path("x"), format="screenplay", beats=[
+        Beat(kind="narration", text="Scene A action."),
+        Beat(kind="heading", text="INT. ROOM - DAY"),
+        Beat(kind="narration", text="Scene B action."),
+        Beat(kind="heading", text="INT. HALL - DAY"),
+        Beat(kind="narration", text="Scene C action."),
+    ])
+    segments = segment_source(doc, _FakeProject())
+    check("all 3 segments are sequence_id 1",
+          [s.sequence_id for s in segments] == [1, 1, 1])
+
+
+def test_sequence_starts_advances_sequence_id() -> None:
+    print("segment_source: sequence_starts advances sequence_id at the "
+          "declared heading occurrence numbers")
+    doc = SourceDocument(path=Path("x"), format="screenplay", beats=[
+        Beat(kind="narration", text="Seq 1 scene 1."),
+        Beat(kind="heading", text="INT. A - DAY"),   # heading #1
+        Beat(kind="narration", text="Seq 1 scene 2."),
+        Beat(kind="heading", text="INT. B - DAY"),   # heading #2 -> new sequence
+        Beat(kind="narration", text="Seq 2 scene 1."),
+        Beat(kind="heading", text="INT. C - DAY"),   # heading #3
+        Beat(kind="narration", text="Seq 2 scene 2."),
+        Beat(kind="heading", text="INT. D - DAY"),   # heading #4 -> new sequence
+        Beat(kind="narration", text="Seq 3 scene 1."),
+    ])
+    project = _FakeProject(sequence_starts=[2, 4])
+    segments = segment_source(doc, project)
+    check("5 segments produced", len(segments) == 5)
+    check("sequence ids advance at headings #2 and #4",
+          [s.sequence_id for s in segments] == [1, 1, 2, 2, 3])
+
+
 if __name__ == "__main__":
     test_respects_char_budget()
     test_caps_locked_characters_at_three()
@@ -149,5 +188,7 @@ if __name__ == "__main__":
     test_narrator_competes_for_lock_slot_in_audiobook_mode()
     test_tail_characters_disabled_by_default()
     test_tail_characters_only_covers_the_trailing_window()
+    test_sequence_id_defaults_to_one()
+    test_sequence_starts_advances_sequence_id()
     print(f"\n{_passed} passed, {_failed} failed")
     sys.exit(1 if _failed else 0)

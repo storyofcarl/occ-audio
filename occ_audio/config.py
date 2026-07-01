@@ -68,6 +68,13 @@ class ProjectConfig:
     defaults: Defaults
     segments: dict[str, dict]         # per-segment overrides, keyed by segment id
     casting_dir: Path
+    name_aliases: dict[str, str] = field(default_factory=dict)  # variant spelling -> canonical
+    sequence_starts: list[int] = field(default_factory=list)  # 1-based heading
+        # occurrence index where each new narrative sequence begins (e.g. the
+        # 8-sequence structure); the continuation chain (METHODOLOGY.md §2a)
+        # only links segments within the same sequence, so different
+        # sequences become independent chains that generate in parallel.
+        # Empty = the whole script is one sequence (today's default behavior).
     raw: dict = field(default_factory=dict)
 
     def segment_override(self, seg_id: str) -> dict:
@@ -215,6 +222,16 @@ def load_project(project: str) -> ProjectConfig:
 
     cast = _parse_cast(root, data.get("cast"))
 
+    aliases_raw = data.get("character_aliases") or {}
+    if not isinstance(aliases_raw, dict):
+        raise ValueError("'character_aliases:' must be a mapping of variant -> canonical name.")
+    name_aliases = {str(k): str(v) for k, v in aliases_raw.items()}
+
+    sequence_starts_raw = data.get("sequence_starts") or []
+    if not isinstance(sequence_starts_raw, list):
+        raise ValueError("'sequence_starts:' must be a list of heading occurrence numbers.")
+    sequence_starts = [int(n) for n in sequence_starts_raw]
+
     return ProjectConfig(
         name=str(data.get("name") or root.name),
         root=root,
@@ -226,5 +243,7 @@ def load_project(project: str) -> ProjectConfig:
         defaults=defaults,
         segments={str(k): (v or {}) for k, v in segments.items()},
         casting_dir=casting_dir,
+        name_aliases=name_aliases,
+        sequence_starts=sequence_starts,
         raw=data,
     )

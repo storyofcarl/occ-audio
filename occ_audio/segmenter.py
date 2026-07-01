@@ -27,6 +27,12 @@ segment's own generated audio can only carry a character's voice forward if
 that character actually spoke in the clip; ``tail_characters`` is how
 ``prompts.build_prompt`` knows who the next segment's continuation reference
 covers. See METHODOLOGY.md §2a.
+
+Each segment also gets a ``sequence_id`` — which narrative sequence (per
+``project.sequence_starts``, a list of 1-based heading occurrence numbers)
+it belongs to. The pipeline only chains continuation across segments in the
+SAME sequence, so different sequences become independent generation chains
+that run in parallel — see METHODOLOGY.md §2b.
 """
 from __future__ import annotations
 
@@ -56,6 +62,8 @@ class DraftSegment:
         # this segment — the only character(s) a tail-clip reference of THIS
         # segment's audio can carry forward to the next one. Empty when
         # continuation is disabled (continuation_seconds == 0).
+    sequence_id: int = 1   # which narrative sequence this segment belongs to;
+        # the chain only links segments with the same sequence_id.
 
 
 def _estimate_seconds(text: str, wpm: int = WORDS_PER_MINUTE) -> float:
@@ -125,10 +133,13 @@ def _split_oversized_beat(beat: Beat, budget: int) -> list[Beat]:
 def segment_source(doc: SourceDocument, project: ProjectConfig) -> list[DraftSegment]:
     target_seconds = project.defaults.target_segment_seconds
     continuation_seconds = project.defaults.continuation_seconds
+    sequence_starts = set(project.sequence_starts)
     segments: list[DraftSegment] = []
     current: list[Beat] = []
     current_chars = 0
     seg_num = 0
+    heading_count = 0
+    sequence_id = 1
 
     def flush() -> None:
         nonlocal current, current_chars, seg_num
@@ -167,6 +178,7 @@ def segment_source(doc: SourceDocument, project: ProjectConfig) -> list[DraftSeg
             estimated_seconds=_estimate_seconds(text_all),
             raw_chars=current_chars, warnings=warnings,
             tail_characters=_tail_characters(current, project.mode, continuation_seconds),
+            sequence_id=sequence_id,
         ))
         current = []
         current_chars = 0
@@ -174,6 +186,9 @@ def segment_source(doc: SourceDocument, project: ProjectConfig) -> list[DraftSeg
     for raw_beat in doc.beats:
         if raw_beat.kind == "heading":
             flush()   # a heading always closes the segment in progress
+            heading_count += 1
+            if heading_count in sequence_starts:
+                sequence_id += 1
             continue
         for beat in _split_oversized_beat(raw_beat, TEXT_BUDGET_CHARS):
             blen = _beat_len(beat)
