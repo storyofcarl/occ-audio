@@ -132,9 +132,46 @@ def test_generate_auditions_rejects_blank_voice_note() -> None:
         check("no backend calls made", len(fake.calls) == 0)
 
 
+class _FlakyOnceBackend:
+    """Fails the very first call, succeeds on every call after — simulates
+    a one-off transient API error (like the real 'text unreadable' HTTP 500
+    seen mid-run, where the identical prompt succeeded on retry)."""
+
+    def __init__(self) -> None:
+        self.attempts = 0
+
+    def preflight(self) -> None:
+        pass
+
+    def generate(self, spec, *, model, on_progress=None):
+        self.attempts += 1
+        if self.attempts == 1:
+            raise RuntimeError("HTTP 500: TTSInvalidText: text unreadable")
+        return AudioResult(audio_bytes=b"\x00\x01fake", duration=15.0, original_duration=15.0)
+
+
+def test_generate_auditions_retries_once_on_transient_failure() -> None:
+    print("generate_auditions: retries a failed take once before giving up "
+          "(a transient API hiccup shouldn't kill the whole cast run)")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "script.txt").write_text("Hero said, \"Hi.\"\n", encoding="utf-8")
+        (root / "project.yaml").write_text(
+            "\n".join(["name: t", "source: script.txt", "cast:", "  Hero:",
+                      "    voice_note: a booming voice"]) + "\n", encoding="utf-8")
+        project = load_project(str(root / "project.yaml"))
+        flaky = _FlakyOnceBackend()
+        casting.get_audio_backend = lambda name: (flaky, "seed-audio-1.0")
+
+        takes = casting.generate_auditions(project, "Hero", n=1)
+        check("take succeeds after one retry", len(takes) == 1)
+        check("exactly 2 attempts made (fail then succeed)", flaky.attempts == 2)
+
+
 if __name__ == "__main__":
     test_extract_characters_key_vs_all()
     test_generate_auditions_writes_takes_and_manifest()
     test_generate_auditions_rejects_blank_voice_note()
+    test_generate_auditions_retries_once_on_transient_failure()
     print(f"\n{_passed} passed, {_failed} failed")
     sys.exit(1 if _failed else 0)

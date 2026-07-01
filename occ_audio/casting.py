@@ -120,7 +120,19 @@ def generate_auditions(project: ProjectConfig, character: str, *,
         )
         if on_progress:
             on_progress(f"{character} take {i}/{n}")
-        result = backend.generate(spec, model=vendor_id, on_progress=on_progress)
+        result = None
+        for attempt in (1, 2):
+            try:
+                result = backend.generate(spec, model=vendor_id, on_progress=on_progress)
+                break
+            except Exception as exc:  # noqa: BLE001
+                if attempt == 1:
+                    if on_progress:
+                        on_progress(f"{character} take {i}/{n} attempt 1 failed "
+                                    f"({exc}) - retrying")
+                    continue
+                raise BackendError(
+                    f"{character} take {i}/{n} failed twice: {exc}") from exc
         take_path = out_dir / f"take_{i}.{ext}"
         take_path.write_bytes(result.audio_bytes)
         takes.append(AuditionTake(variant=f"take {i}", prompt=prompt, path=take_path))
